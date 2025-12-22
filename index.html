@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manday Input System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Sarabun:wght@400;500;600;700&display=swap');
+        body { font-family: 'Sarabun', 'Inter', sans-serif; background-color: #111827; color: #f3f4f6; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #4b5563; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background-color: #1f2937; }
+        input:focus, select:focus, textarea:focus { outline: none; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5); border-color: #6366f1; }
+        input, select, textarea { background-color: #374151; border-color: #4b5563; color: #f3f4f6; }
+        
+        .status-work { background-color: #065f46; color: #d1fae5; border-color: #047857; }
+        .status-training { background-color: #1e3a8a; color: #dbeafe; border-color: #1e40af; }
+        .status-leave { background-color: #7f1d1d; color: #fecaca; border-color: #991b1b; }
+        .status-holiday { background-color: #78350f; color: #fef3c7; border-color: #92400e; }
+        .status-terminate { background-color: #1f2937; color: #9ca3af; border-color: #374151; }
+        .status-default { background-color: #374151; color: #f3f4f6; border-color: #4b5563; }
+    </style>
+</head>
+<body>
+
+<div id="app" class="min-h-screen flex items-center justify-center p-2 sm:p-6 lg:p-8">
+    
+    <!-- Login View -->
+    <div id="login-view" class="w-full max-w-sm bg-gray-800 p-6 shadow-2xl rounded-xl mx-4 border border-gray-700">
+        <h1 class="text-3xl font-bold text-white mb-6 text-center">เข้าสู่ระบบ</h1>
+        <form id="login-form" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">เบอร์โทรศัพท์</label>
+                <input type="tel" id="phone" required class="w-full px-4 py-3 border rounded-lg text-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-indigo-500" placeholder="08xxxxxxxx" pattern="[0-9]{10}">
+            </div>
+            <button type="submit" class="w-full py-3 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition duration-150">เข้าสู่ระบบ</button>
+            <div id="login-message" class="text-center text-sm mt-3 hidden text-gray-300"></div>
+        </form>
+    </div>
+
+    <!-- Manday View -->
+    <div id="manday-view" class="hidden w-full max-w-7xl bg-gray-800 sm:shadow-xl sm:rounded-xl flex flex-col h-[95vh] sm:h-auto overflow-hidden sm:overflow-visible border border-gray-700">
+        <div class="flex flex-col sm:flex-row justify-between items-center p-4 border-b border-gray-700 bg-gray-800 z-20 gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-white">บันทึก Manday</h1>
+                <p id="supervisor-name" class="text-indigo-400 font-semibold"></p>
+            </div>
+            <button id="logout-btn" class="text-red-400 border border-red-900/50 bg-red-900/20 px-4 py-2 rounded-lg hover:bg-red-900/40 transition">ออกจากระบบ</button>
+        </div>
+
+        <form id="manday-form" class="flex flex-col flex-grow overflow-hidden bg-gray-900 sm:bg-gray-800">
+            <div class="p-4 bg-gray-800 sm:bg-gray-900/50 border-b sm:border border-gray-700 flex flex-col sm:flex-row items-center gap-3 shrink-0 sm:m-4 sm:rounded-lg sticky top-0 sm:static z-10">
+                <label class="text-lg font-semibold text-indigo-400">วันที่บันทึก:</label>
+                <input type="date" id="input-date" required class="px-4 py-2 border border-gray-600 rounded-lg text-lg bg-gray-700 text-white focus:ring-indigo-500">
+                <span id="loading-indicator" class="text-gray-400 text-sm hidden"><i class="fas fa-spinner fa-spin"></i> กำลังโหลดข้อมูล...</span>
+            </div>
+
+            <div class="flex-grow overflow-y-auto custom-scrollbar sm:px-4">
+                <div id="manday-rows-container" class="space-y-4 p-4 sm:p-0">
+                    <!-- Dynamic Rows Here -->
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-gray-700 bg-gray-800 z-20">
+                <button type="submit" id="submit-btn" class="w-full py-4 bg-green-700 text-white text-xl font-bold rounded-xl hover:bg-green-600 disabled:bg-gray-600 disabled:text-gray-400 transition" disabled>ยืนยันการบันทึกข้อมูล</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Modal -->
+    <div id="modal" class="fixed inset-0 bg-black bg-opacity-70 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
+        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-sm border border-gray-700">
+            <h3 id="modal-title" class="text-xl font-bold mb-3 text-center text-white"></h3>
+            <p id="modal-body" class="text-gray-300 mb-6 text-center"></p>
+            <button id="modal-close-btn" class="w-full py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">ตกลง</button>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, getDocs, doc, query, where, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    // *** TODO: PASTE YOUR CONFIG HERE ***
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_PROJECT.firebaseapp.com",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_PROJECT.appspot.com",
+        messagingSenderId: "SENDER_ID",
+        appId: "APP_ID"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let appState = { supervisor: null, inputDate: new Date().toISOString().split('T')[0], membersData: {}, teamMembers: [], storeMaster: [] };
+    const views = { login: document.getElementById('login-view'), manday: document.getElementById('manday-view') };
+    const els = {
+        loginForm: document.getElementById('login-form'), mandayForm: document.getElementById('manday-form'),
+        phone: document.getElementById('phone'), loginMsg: document.getElementById('login-message'),
+        supName: document.getElementById('supervisor-name'), date: document.getElementById('input-date'),
+        container: document.getElementById('manday-rows-container'), submitBtn: document.getElementById('submit-btn'),
+        loader: document.getElementById('loading-indicator'),
+        modal: document.getElementById('modal'), modalTitle: document.getElementById('modal-title'),
+        modalBody: document.getElementById('modal-body'), modalBtn: document.getElementById('modal-close-btn')
+    };
+
+    const showModal = (t, m) => { els.modalTitle.textContent = t; els.modalBody.textContent = m; els.modal.classList.replace('hidden', 'flex'); };
+    els.modalBtn.onclick = () => els.modal.classList.replace('flex', 'hidden');
+
+    function createMemberRow(member) {
+        if (!appState.membersData[member.id]) appState.membersData[member.id] = { status: '', stores: [], remarks: '' };
+        const state = appState.membersData[member.id];
+        const div = document.createElement('div');
+        div.className = "bg-gray-800 rounded-xl shadow-sm border border-gray-700 p-4 sm:flex sm:items-start sm:gap-4 hover:border-gray-600 transition duration-150";
+        div.dataset.id = member.id;
+        const displayName = `${member.name} ${member.nickname ? '('+member.nickname+')' : ''}`;
+        const roleBadge = member.role === 'Supervisor' ? `<span class="text-[10px] bg-indigo-900 text-indigo-200 px-1.5 py-0.5 rounded font-bold ml-1 border border-indigo-700">SUP</span>` : '';
+
+        div.innerHTML = `
+            <div class="sm:w-1/4 mb-3 sm:mb-0">
+                <div class="flex justify-between items-center mb-1">
+                    <div class="font-bold text-gray-100 text-lg sm:text-base">${displayName} ${roleBadge}</div>
+                    <span class="text-xs bg-gray-700 px-2 py-1 rounded text-gray-400 font-mono border border-gray-600">${member.id}</span>
+                </div>
+            </div>
+            <div class="sm:w-3/4 space-y-3">
+                <div>
+                    <select class="status-select w-full p-2 border rounded-lg font-semibold status-default bg-gray-700 text-white border-gray-600 focus:ring-indigo-500">
+                        <option value="" disabled ${!state.status ? 'selected' : ''}>เลือกสถานะ</option>
+                        ${['ลงงาน','อบรม','ลาป่วย','ลากิจ','ลาไม่รับค่าจ้าง','วันหยุดประจำสัปดาห์','วันหยุดนักขัตฤกษ์','ติดต่อไม่ได้','หมดสัญญา','ลาออก'].map(s => `<option value="${s}" ${state.status===s?'selected':''}>${s}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="store-section ${state.status !== 'ลงงาน' ? 'hidden' : ''}">
+                    <div class="bg-gray-900/50 p-3 rounded-lg border border-gray-700">
+                        <div class="text-xs font-semibold text-gray-400 mb-2">เพิ่มร้านค้า</div>
+                        <div class="flex flex-col sm:flex-row gap-2 mb-2">
+                            <select class="store-type-select p-2 border rounded text-sm sm:w-1/3 bg-gray-700 text-white border-gray-600">
+                                <option value="permanent">🏠 ร้านประจำ</option>
+                                <option value="event">🎪 ร้าน Event</option>
+                            </select>
+                            <div class="flex-grow flex gap-2 input-area">
+                                <select class="store-input-perm w-full p-2 border rounded text-sm bg-gray-700 text-white border-gray-600">
+                                    <option value="">เลือกสาขา...</option>
+                                    ${appState.storeMaster.map(s => `<option value="${s.id}">${s.name} (${s.id})</option>`).join('')}
+                                </select>
+                                <input type="text" class="store-input-event w-full p-2 border rounded text-sm hidden bg-gray-700 text-white border-gray-600 placeholder-gray-500" placeholder="ระบุชื่องาน Event">
+                            </div>
+                            <button type="button" class="add-store-btn bg-indigo-600 text-white px-3 py-2 rounded hover:bg-indigo-700 transition"><i class="fas fa-plus"></i></button>
+                        </div>
+                        <div class="store-list flex flex-wrap gap-2 mt-2"></div>
+                    </div>
+                </div>
+                <textarea class="remarks-input w-full p-2 border rounded-lg text-sm bg-gray-700 text-white border-gray-600 placeholder-gray-500 focus:ring-indigo-500" placeholder="หมายเหตุ..." rows="1">${state.remarks || ''}</textarea>
+            </div>`;
+
+        const statusSelect = div.querySelector('.status-select');
+        const storeSec = div.querySelector('.store-section');
+        statusSelect.addEventListener('change', (e) => {
+            appState.membersData[member.id].status = e.target.value;
+            updateStatusColor(statusSelect, e.target.value);
+            if (e.target.value === 'ลงงาน') storeSec.classList.remove('hidden');
+            else { storeSec.classList.add('hidden'); appState.membersData[member.id].stores = []; renderChips(div); }
+        });
+        updateStatusColor(statusSelect, state.status);
+
+        div.querySelector('.add-store-btn').addEventListener('click', () => {
+            const type = div.querySelector('.store-type-select').value;
+            const permInput = div.querySelector('.store-input-perm');
+            const eventInput = div.querySelector('.store-input-event');
+            let val = type === 'permanent' ? (permInput.selectedIndex > 0 ? `${permInput.options[permInput.selectedIndex].text}` : '') : (eventInput.value.trim() ? `(Event) ${eventInput.value.trim()}` : '');
+            if (val && !appState.membersData[member.id].stores.includes(val)) {
+                appState.membersData[member.id].stores.push(val); renderChips(div); permInput.value = ""; eventInput.value = "";
+            }
+        });
+
+        div.querySelector('.store-type-select').addEventListener('change', (e) => {
+            const perm = div.querySelector('.store-input-perm'); const evt = div.querySelector('.store-input-event');
+            if(e.target.value === 'permanent') { perm.classList.remove('hidden'); evt.classList.add('hidden'); }
+            else { perm.classList.add('hidden'); evt.classList.remove('hidden'); }
+        });
+
+        div.querySelector('.remarks-input').addEventListener('change', (e) => appState.membersData[member.id].remarks = e.target.value);
+        renderChips(div);
+        return div;
+    }
+
+    function renderChips(rowDiv) {
+        const memberId = rowDiv.dataset.id;
+        const container = rowDiv.querySelector('.store-list');
+        container.innerHTML = '';
+        appState.membersData[memberId].stores.forEach(s => {
+            const chip = document.createElement('span');
+            chip.className = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-900 text-indigo-200 border border-indigo-700";
+            chip.innerHTML = `${s}<button type="button" class="ml-1.5 text-indigo-400 hover:text-indigo-300 focus:outline-none">×</button>`;
+            chip.querySelector('button').addEventListener('click', () => {
+                appState.membersData[memberId].stores = appState.membersData[memberId].stores.filter(x => x !== s);
+                renderChips(rowDiv);
+            });
+            container.appendChild(chip);
+        });
+    }
+
+    function updateStatusColor(el, val) {
+        el.className = 'status-select w-full p-2 border rounded-lg font-semibold ' + 
+            (val === 'ลงงาน' ? 'status-work' : val === 'อบรม' ? 'status-training' : ['ลาป่วย','ลากิจ','ลาไม่รับค่าจ้าง','ติดต่อไม่ได้'].includes(val) ? 'status-leave' : val.includes('วันหยุด') ? 'status-holiday' : ['หมดสัญญา','ลาออก'].includes(val) ? 'status-terminate' : 'status-default');
+    }
+
+    async function login(phone) {
+        const q = query(collection(db, "supervisors"), where("__name__", "==", phone));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) throw new Error("ไม่พบเบอร์โทรศัพท์ในระบบ");
+        const docSnap = snapshot.docs[0];
+        return { id: docSnap.id, ...docSnap.data() };
+    }
+
+    async function fetchMasterData(teamName) {
+        const memSnap = await getDocs(query(collection(db, "members"), where("team", "==", teamName)));
+        appState.teamMembers = memSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.role === 'Supervisor' ? -1 : 1) || a.name.localeCompare(b.name));
+        const storeSnap = await getDocs(query(collection(db, "stores"), where("team", "==", teamName)));
+        appState.storeMaster = storeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+
+    async function loadDailyData(date) {
+        els.loader.classList.remove('hidden'); els.submitBtn.disabled = true;
+        appState.teamMembers.forEach(m => appState.membersData[m.id] = { status: '', stores: [], remarks: '' });
+        try {
+            const snapshot = await getDocs(query(collection(db, "manday_submissions"), where("date", "==", date), where("supervisor", "==", appState.supervisor.name)));
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                if(appState.membersData[data.memberId]) {
+                    appState.membersData[data.memberId].status = data.status;
+                    appState.membersData[data.memberId].stores = data.stores || [];
+                    appState.membersData[data.memberId].remarks = data.remarks || '';
+                }
+            });
+            els.container.innerHTML = '';
+            appState.teamMembers.forEach(m => els.container.appendChild(createMemberRow(m)));
+        } catch (e) { console.error(e); } finally { els.loader.classList.add('hidden'); els.submitBtn.disabled = false; }
+    }
+
+    async function submitData() {
+        els.submitBtn.disabled = true; els.submitBtn.textContent = "กำลังบันทึก...";
+        try {
+            const batch = writeBatch(db);
+            const date = appState.inputDate;
+            const supName = appState.supervisor.name;
+            const oldDocs = await getDocs(query(collection(db, "manday_submissions"), where("date", "==", date), where("supervisor", "==", supName)));
+            oldDocs.forEach(d => batch.delete(d.ref));
+
+            for (const [mid, mdata] of Object.entries(appState.membersData)) {
+                const memberInfo = appState.teamMembers.find(m => m.id === mid);
+                if (!mdata.status) throw new Error(`กรุณาเลือกสถานะสำหรับ ${memberInfo.name}`);
+                if (mdata.status === 'ลงงาน' && mdata.stores.length === 0) throw new Error(`กรุณาระบุร้านค้าสำหรับ ${memberInfo.name}`);
+                
+                const newDocRef = doc(collection(db, "manday_submissions"));
+                batch.set(newDocRef, {
+                    date: date, supervisor: supName, supervisorId: appState.supervisor.id,
+                    memberId: mid, memberName: memberInfo.name, memberNickname: memberInfo.nickname || '', memberRole: memberInfo.role || '',
+                    status: mdata.status, stores: mdata.stores, remarks: mdata.remarks, timestamp: serverTimestamp()
+                });
+            }
+            await batch.commit();
+            showModal("สำเร็จ", "บันทึกข้อมูลเรียบร้อยแล้ว");
+        } catch (e) { showModal("ผิดพลาด", e.message); } finally { els.submitBtn.disabled = false; els.submitBtn.textContent = "ยืนยันการบันทึกข้อมูล"; }
+    }
+
+    els.loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const phone = els.phone.value.trim();
+        els.loginMsg.textContent = "Connecting..."; els.loginMsg.classList.remove('hidden');
+        try {
+            const supData = await login(phone);
+            appState.supervisor = supData;
+            els.supName.textContent = `${supData.name} (${supData.team})`;
+            views.login.classList.add('hidden'); views.manday.classList.remove('hidden');
+            await fetchMasterData(supData.team);
+            els.date.value = appState.inputDate;
+            await loadDailyData(appState.inputDate);
+        } catch (err) { els.loginMsg.textContent = err.message; els.loginMsg.classList.add('text-red-400'); }
+    });
+
+    els.date.addEventListener('change', (e) => { appState.inputDate = e.target.value; loadDailyData(e.target.value); });
+    els.mandayForm.addEventListener('submit', (e) => { e.preventDefault(); submitData(); });
+    document.getElementById('logout-btn').onclick = () => location.reload();
+</script>
+</body>
+</html>
