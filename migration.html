@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Migration Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto space-y-8">
+        <div class="bg-white p-6 rounded-xl shadow">
+            <h1 class="text-2xl font-bold mb-2">Data Migration</h1>
+            <p>Paste CSV content below. Headers are ignored if they match expected format.</p>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow">
+            <h2 class="font-bold mb-2">1. Supervisors (Phone, Name, Team)</h2>
+            <textarea id="csv-supervisors" rows="4" class="w-full border p-2 font-mono text-sm"></textarea>
+            <button onclick="importData('supervisors')" class="mt-2 bg-green-600 text-white px-4 py-2 rounded">Import</button>
+            <div id="log-supervisors" class="mt-2 text-xs text-gray-500"></div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow">
+            <h2 class="font-bold mb-2">2. Members (ID, Name, Nickname, Team, Role)</h2>
+            <textarea id="csv-members" rows="4" class="w-full border p-2 font-mono text-sm"></textarea>
+            <button onclick="importData('members')" class="mt-2 bg-green-600 text-white px-4 py-2 rounded">Import</button>
+            <div id="log-members" class="mt-2 text-xs text-gray-500"></div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow">
+            <h2 class="font-bold mb-2">3. Stores (Code, Name, Team)</h2>
+            <textarea id="csv-stores" rows="4" class="w-full border p-2 font-mono text-sm"></textarea>
+            <button onclick="importData('stores')" class="mt-2 bg-green-600 text-white px-4 py-2 rounded">Import</button>
+            <div id="log-stores" class="mt-2 text-xs text-gray-500"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // *** TODO: PASTE YOUR CONFIG HERE ***
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT.appspot.com",
+            messagingSenderId: "SENDER_ID",
+            appId: "APP_ID"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        window.importData = async (type) => {
+            const raw = document.getElementById(`csv-${type}`).value.trim();
+            const log = document.getElementById(`log-${type}`);
+            if(!raw) return alert("Empty");
+            
+            const lines = raw.split('\n');
+            let count = 0;
+            
+            for(let i=0; i<lines.length; i++) {
+                // Skip possible header row if it contains the word "Name" or "ID" (simple check)
+                if (i===0 && (lines[i].includes('Name') || lines[i].includes('Team'))) continue;
+                
+                const cols = lines[i].split(',').map(c => c.trim());
+                if(cols.length < 2) continue;
+
+                try {
+                    let id, data;
+                    if(type==='supervisors') { id=cols[0]; data={name:cols[1], team:cols[2]}; }
+                    else if(type==='members') { id=cols[0]; data={name:cols[1], nickname:cols[2]||'', team:cols[3], role:cols[4]||'Member'}; }
+                    else if(type==='stores') { id=cols[0]; data={name:cols[1], team:cols[2]}; }
+                    
+                    if(id) { await setDoc(doc(db, type, id), data); count++; }
+                } catch(e) { console.error(e); }
+            }
+            log.innerText = `Imported ${count} rows.`;
+        };
+    </script>
+</body>
+</html>
