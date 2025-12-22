@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manday Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap');
+        body { font-family: 'Sarabun', 'Inter', sans-serif; background-color: #f3f4f6; }
+        .active-nav { background-color: #e0e7ff; color: #4338ca; border-right: 3px solid #4338ca; }
+        .loader { border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid #4f46e5; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="h-screen flex overflow-hidden">
+    <aside class="w-64 bg-white border-r border-gray-200 flex flex-col hidden md:flex">
+        <div class="h-16 flex items-center px-6 border-b border-gray-200">
+            <i class="fas fa-shield-alt text-indigo-600 text-xl mr-3"></i><span class="font-bold text-gray-800 text-lg">Admin Panel</span>
+        </div>
+        <nav class="flex-1 overflow-y-auto py-4">
+            <a href="#" onclick="switchTab('members')" id="nav-members" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50 active-nav"><i class="fas fa-users w-6"></i><span class="font-medium">Members</span></a>
+            <a href="#" onclick="switchTab('stores')" id="nav-stores" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50"><i class="fas fa-store w-6"></i><span class="font-medium">Store Master</span></a>
+            <a href="#" onclick="switchTab('supervisors')" id="nav-supervisors" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50"><i class="fas fa-user-tie w-6"></i><span class="font-medium">Supervisors</span></a>
+            <div class="border-t border-gray-100 my-2 pt-2"><a href="#" onclick="switchTab('reports')" id="nav-reports" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50"><i class="fas fa-table w-6"></i><span class="font-medium">Daily Reports</span></a></div>
+        </nav>
+    </aside>
+
+    <main class="flex-1 flex flex-col bg-gray-50 overflow-hidden">
+        <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shadow-sm z-10">
+            <button class="md:hidden text-gray-600"><i class="fas fa-bars text-xl"></i></button>
+            <div class="text-gray-500 text-sm">Welcome, <span class="font-bold text-gray-800">Admin</span></div>
+        </header>
+        <div class="flex-1 overflow-auto p-6" id="main-container"></div>
+    </main>
+
+    <div id="modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50"><h3 class="font-bold text-lg text-gray-800" id="modal-title">Edit</h3><button onclick="closeModal()"><i class="fas fa-times"></i></button></div>
+            <form id="modal-form" class="p-6 space-y-4"></form>
+            <div class="px-6 py-4 bg-gray-50 flex justify-end gap-3"><button onclick="closeModal()" class="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg">Cancel</button><button type="button" id="save-btn" class="px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg">Save</button></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // *** TODO: PASTE YOUR CONFIG HERE ***
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT.appspot.com",
+            messagingSenderId: "SENDER_ID",
+            appId: "APP_ID"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        let currentTab = 'members'; let itemsData = [];
+        const container = document.getElementById('main-container'); const modal = document.getElementById('modal'); const modalForm = document.getElementById('modal-form'); const saveBtn = document.getElementById('save-btn');
+
+        window.switchTab = async (tab) => {
+            currentTab = tab;
+            document.querySelectorAll('nav a').forEach(el => el.classList.remove('active-nav', 'bg-indigo-50', 'text-indigo-700'));
+            document.getElementById(`nav-${tab}`).classList.add('active-nav');
+            await loadData(tab);
+        };
+
+        async function loadData(tab) {
+            container.innerHTML = '<div class="flex justify-center items-center h-full"><div class="loader"></div></div>';
+            try {
+                const colName = tab === 'reports' ? 'manday_submissions' : tab;
+                const snapshot = await getDocs(collection(db, colName));
+                itemsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderTable(tab, itemsData);
+            } catch (error) { container.innerHTML = `<div class="text-red-500 text-center">Error: ${error.message}</div>`; }
+        }
+
+        function renderTable(tab, data) {
+            let columns = [], title = "", canEdit = true, canAdd = true;
+            if (tab === 'members') {
+                title = "Team Members";
+                columns = [ {k:'id',l:'ID'}, {k:'name',l:'Name'}, {k:'nickname',l:'Nick'}, {k:'role',l:'Role'}, {k:'team',l:'Team'} ];
+            } else if (tab === 'stores') {
+                title = "Store Master";
+                columns = [ {k:'id',l:'Code'}, {k:'name',l:'Name'}, {k:'team',l:'Team'} ];
+            } else if (tab === 'supervisors') {
+                title = "Supervisors";
+                columns = [ {k:'id',l:'Phone'}, {k:'name',l:'Name'}, {k:'team',l:'Team'} ];
+            } else if (tab === 'reports') {
+                title = "Reports"; canEdit = false; canAdd = false;
+                columns = [ {k:'date',l:'Date'}, {k:'supervisor',l:'Sup'}, {k:'memberName',l:'Member'}, {k:'status',l:'Status'}, {k:'stores',l:'Stores', r:(v)=>Array.isArray(v)?v.join(', '):(v||'-')} ];
+            }
+
+            const html = `
+                <div class="flex justify-between mb-6"><div><h2 class="text-2xl font-bold">${title}</h2></div><div class="flex gap-2"><button onclick="exportCSV('${tab}')" class="bg-green-600 text-white px-4 py-2 rounded-lg">Export CSV</button>${canAdd ? `<button onclick="openAdd('${tab}')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">Add New</button>` : ''}</div></div>
+                <div class="bg-white rounded-xl shadow-sm border overflow-x-auto"><table class="w-full text-left"><thead class="bg-gray-50 border-b"><tr>${columns.map(c=>`<th class="px-6 py-4 font-semibold text-xs text-gray-500 uppercase">${c.l}</th>`).join('')}<th class="px-6 py-4 text-right">Actions</th></tr></thead><tbody class="divide-y divide-gray-100 text-sm">${data.map(i => `<tr>${columns.map(c=>`<td class="px-6 py-4">${c.r ? c.r(i[c.k]) : (i[c.k]||'-')}</td>`).join('')}<td class="px-6 py-4 text-right space-x-2">${canEdit?`<button onclick="openEdit('${tab}','${i.id}')" class="text-indigo-600">Edit</button>`:''}<button onclick="delItem('${tab==='reports'?'manday_submissions':tab}','${i.id}')" class="text-red-400">Delete</button></td></tr>`).join('')}</tbody></table></div>
+            `;
+            container.innerHTML = html;
+        }
+
+        window.exportCSV = (tab) => {
+            if (!itemsData.length) return alert("No data");
+            const headers = Object.keys(itemsData[0]);
+            const rows = [headers.join(',')];
+            itemsData.forEach(row => rows.push(headers.map(h => `"${('' + (row[h]||'')).replace(/"/g,'""')}"`).join(',')));
+            const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows.join('\n')], {type:'text/csv'})); a.download = `${tab}.csv`; a.click();
+        };
+
+        window.openAdd = (tab) => { renderForm(tab, {}); saveBtn.onclick = () => save(tab, true); modal.classList.remove('hidden'); modal.classList.add('flex'); };
+        window.openEdit = (tab, id) => { renderForm(tab, itemsData.find(i=>i.id===id)); saveBtn.onclick = () => save(tab, false, id); modal.classList.remove('hidden'); modal.classList.add('flex'); };
+        window.closeModal = () => { modal.classList.add('hidden'); modal.classList.remove('flex'); };
+
+        function renderForm(tab, data) {
+            let fields = '';
+            if (tab === 'members') {
+                fields = `<input name="id" value="${data.id||''}" placeholder="ID (Key)" class="w-full border p-2 rounded" ${data.id?'disabled':''}><input name="name" value="${data.name||''}" placeholder="Name" class="w-full border p-2 rounded"><input name="nickname" value="${data.nickname||''}" placeholder="Nickname" class="w-full border p-2 rounded"><input name="team" value="${data.team||''}" placeholder="Team" class="w-full border p-2 rounded"><select name="role" class="w-full border p-2 rounded"><option value="Member">Member</option><option value="Supervisor" ${data.role==='Supervisor'?'selected':''}>Supervisor</option></select>`;
+            } else if (tab === 'stores') {
+                fields = `<input name="id" value="${data.id||''}" placeholder="Code (Key)" class="w-full border p-2 rounded" ${data.id?'disabled':''}><input name="name" value="${data.name||''}" placeholder="Store Name" class="w-full border p-2 rounded"><input name="team" value="${data.team||''}" placeholder="Team" class="w-full border p-2 rounded">`;
+            } else if (tab === 'supervisors') {
+                fields = `<input name="id" value="${data.id||''}" placeholder="Phone (Key)" class="w-full border p-2 rounded" ${data.id?'disabled':''}><input name="name" value="${data.name||''}" placeholder="Name" class="w-full border p-2 rounded"><input name="team" value="${data.team||''}" placeholder="Team" class="w-full border p-2 rounded">`;
+            }
+            modalForm.innerHTML = fields;
+        }
+
+        async function save(tab, isNew, oldId) {
+            const formData = new FormData(modalForm); const data = Object.fromEntries(formData.entries()); const docId = isNew ? data.id : oldId; delete data.id;
+            if(!docId) return alert("ID Required");
+            try { await setDoc(doc(db, tab, docId), data, {merge:true}); closeModal(); loadData(tab); } catch(e) { alert(e.message); }
+        }
+
+        window.delItem = async (col, id) => { if(confirm("Delete?")) { await deleteDoc(doc(db, col, id)); loadData(currentTab); } };
+        switchTab('members');
+    </script>
+</body>
+</html>
