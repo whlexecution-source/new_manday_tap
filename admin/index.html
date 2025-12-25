@@ -236,10 +236,23 @@
                     const remarks = escapeCsv(item.remarks || '');
 
                     if (item.stores && Array.isArray(item.stores) && item.stores.length > 0) {
-                        for (const store of item.stores) {
+                        for (const rawStore of item.stores) {
                             let type = 'Permanent';
-                            if (store.startsWith('(Event)')) type = 'Event';
-                            const row = [`"${ts}"`, `"${sup}"`, `"${date}"`, `"${mid}"`, `"${mName}"`, `"${mNick}"`, `"${mPhone}"`, `"${role}"`, `"${status}"`, `"${type}"`, `"${escapeCsv(store)}"`, `"${remarks}"`];
+                            let formattedStore = rawStore;
+
+                            if (rawStore.startsWith('(Event)')) {
+                                type = 'Event';
+                            } else {
+                                // Attempt to parse "Name (Code)" format into "(ID: Code) Name"
+                                const match = rawStore.match(/^(.*)\s\(([^)]+)\)$/);
+                                if (match) {
+                                    const name = match[1];
+                                    const code = match[2];
+                                    formattedStore = `(ID: ${code}) ${name}`;
+                                }
+                            }
+
+                            const row = [`"${ts}"`, `"${sup}"`, `"${date}"`, `"${mid}"`, `"${mName}"`, `"${mNick}"`, `"${mPhone}"`, `"${role}"`, `"${status}"`, `"${type}"`, `"${escapeCsv(formattedStore)}"`, `"${remarks}"`];
                             csvRows.push(row.join(','));
                         }
                     } else {
