@@ -23,7 +23,10 @@
             <a href="#" onclick="switchTab('members')" id="nav-members" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50 active-nav"><i class="fas fa-users w-6"></i><span class="font-medium">Members</span></a>
             <a href="#" onclick="switchTab('stores')" id="nav-stores" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50"><i class="fas fa-store w-6"></i><span class="font-medium">Store Master</span></a>
             <a href="#" onclick="switchTab('supervisors')" id="nav-supervisors" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50"><i class="fas fa-user-tie w-6"></i><span class="font-medium">Supervisors</span></a>
-            <div class="border-t border-gray-100 my-2 pt-2"><a href="#" onclick="switchTab('reports')" id="nav-reports" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50"><i class="fas fa-table w-6"></i><span class="font-medium">Daily Reports</span></a></div>
+            <div class="border-t border-gray-100 my-2 pt-2">
+                <a href="#" onclick="switchTab('reports')" id="nav-reports" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50"><i class="fas fa-table w-6"></i><span class="font-medium">Daily Reports</span></a>
+                <a href="#" onclick="switchTab('migration')" id="nav-migration" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50"><i class="fas fa-file-import w-6"></i><span class="font-medium">Data Migration</span></a>
+            </div>
         </nav>
     </aside>
 
@@ -67,7 +70,72 @@
             currentTab = tab;
             document.querySelectorAll('nav a').forEach(el => el.classList.remove('active-nav', 'bg-indigo-50', 'text-indigo-700'));
             document.getElementById(`nav-${tab}`).classList.add('active-nav');
-            await loadData(tab);
+            
+            if (tab === 'migration') {
+                renderMigration();
+            } else {
+                await loadData(tab);
+            }
+        };
+
+        function renderMigration() {
+            container.innerHTML = `
+                <div class="max-w-4xl mx-auto space-y-6">
+                    <div class="flex justify-between items-center"><h2 class="text-2xl font-bold text-gray-800">Data Migration</h2></div>
+                    <div class="bg-blue-50 border border-blue-200 p-4 rounded-lg text-sm text-blue-800">Use this tool to bulk upload data. Paste CSV content (no headers needed if order matches).</div>
+
+                    <div class="bg-white p-6 rounded-xl shadow">
+                        <h2 class="font-bold mb-2">1. Supervisors (Phone, Name, Team)</h2>
+                        <textarea id="csv-supervisors" rows="3" class="w-full border p-2 font-mono text-xs rounded" placeholder="0812345678,Sup Name,Team A"></textarea>
+                        <button onclick="importData('supervisors')" class="mt-2 bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700">Import Supervisors</button>
+                        <div id="log-supervisors" class="mt-2 text-xs text-gray-500"></div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl shadow">
+                        <h2 class="font-bold mb-2">2. Members (ID, Name, Nickname, Phone, Team, Role)</h2>
+                        <textarea id="csv-members" rows="3" class="w-full border p-2 font-mono text-xs rounded" placeholder="EMP001,Somchai,Chai,0901234567,Team A,Member"></textarea>
+                        <button onclick="importData('members')" class="mt-2 bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700">Import Members</button>
+                        <div id="log-members" class="mt-2 text-xs text-gray-500"></div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl shadow">
+                        <h2 class="font-bold mb-2">3. Stores (Code, Name, Team)</h2>
+                        <textarea id="csv-stores" rows="3" class="w-full border p-2 font-mono text-xs rounded" placeholder="S001,Central World,Team A"></textarea>
+                        <button onclick="importData('stores')" class="mt-2 bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700">Import Stores</button>
+                        <div id="log-stores" class="mt-2 text-xs text-gray-500"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        window.importData = async (type) => {
+            const raw = document.getElementById(`csv-${type}`).value.trim();
+            const log = document.getElementById(`log-${type}`);
+            if(!raw) return alert("Empty input");
+            
+            const lines = raw.split('\n');
+            let count = 0;
+            log.innerText = "Processing...";
+            
+            for(let i=0; i<lines.length; i++) {
+                if (i===0 && (lines[i].toLowerCase().includes('name') || lines[i].toLowerCase().includes('team'))) continue; // Skip header
+                const cols = lines[i].split(',').map(c => c.trim());
+                if(cols.length < 2) continue;
+
+                try {
+                    let id, data;
+                    if(type==='supervisors') { id=cols[0]; data={name:cols[1], team:cols[2]}; }
+                    else if(type==='members') { 
+                        // Updated to include phone at index 3
+                        id=cols[0]; 
+                        data={name:cols[1], nickname:cols[2]||'', phone:cols[3]||'', team:cols[4], role:cols[5]||'Member'}; 
+                    }
+                    else if(type==='stores') { id=cols[0]; data={name:cols[1], team:cols[2]}; }
+                    
+                    if(id) { await setDoc(doc(db, type, id), data); count++; }
+                } catch(e) { console.error(e); }
+            }
+            log.innerText = `Success! Imported ${count} rows.`;
         };
 
         async function loadData(tab) {
@@ -84,7 +152,8 @@
             let columns = [], title = "", canEdit = true, canAdd = true;
             if (tab === 'members') {
                 title = "Team Members";
-                columns = [ {k:'id',l:'ID'}, {k:'name',l:'Name'}, {k:'nickname',l:'Nick'}, {k:'role',l:'Role'}, {k:'team',l:'Team'} ];
+                // Added Phone column
+                columns = [ {k:'id',l:'ID'}, {k:'name',l:'Name'}, {k:'nickname',l:'Nick'}, {k:'phone',l:'Phone'}, {k:'role',l:'Role'}, {k:'team',l:'Team'} ];
             } else if (tab === 'stores') {
                 title = "Store Master";
                 columns = [ {k:'id',l:'Code'}, {k:'name',l:'Name'}, {k:'team',l:'Team'} ];
@@ -96,7 +165,6 @@
                 columns = [ {k:'date',l:'Date'}, {k:'supervisor',l:'Sup'}, {k:'memberName',l:'Member'}, {k:'status',l:'Status'}, {k:'stores',l:'Stores', r:(v)=>Array.isArray(v)?v.join(', '):(v||'-')} ];
             }
 
-            // Updated HTML to include Date Pickers for Reports tab
             const html = `
                 <div class="flex justify-between mb-6 flex-wrap gap-4 items-end">
                     <div><h2 class="text-2xl font-bold">${title}</h2></div>
@@ -104,9 +172,9 @@
                         ${tab === 'reports' ? `
                             <div class="flex items-center gap-2 mr-2 bg-white p-1 rounded border shadow-sm">
                                 <span class="text-xs text-gray-500 pl-1">Filter Date:</span>
-                                <input type="date" id="export-start" class="text-sm border border-gray-200 rounded px-2 py-1 focus:ring-indigo-500 focus:border-indigo-500" title="Start Date">
+                                <input type="date" id="export-start" class="text-sm border border-gray-200 rounded px-2 py-1 focus:ring-indigo-500 focus:border-indigo-500">
                                 <span class="text-gray-400">-</span>
-                                <input type="date" id="export-end" class="text-sm border border-gray-200 rounded px-2 py-1 focus:ring-indigo-500 focus:border-indigo-500" title="End Date">
+                                <input type="date" id="export-end" class="text-sm border border-gray-200 rounded px-2 py-1 focus:ring-indigo-500 focus:border-indigo-500">
                             </div>
                         ` : ''}
                         <button onclick="exportCSV('${tab}')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow-sm flex items-center gap-2"><i class="fas fa-file-csv"></i> Export CSV</button>
@@ -123,32 +191,35 @@
             return ('' + val).replace(/"/g, '""');
         }
 
-        window.exportCSV = (tab) => {
-            // Apply Date Filter if on Reports tab
+        window.exportCSV = async (tab) => {
             let dataToExport = itemsData;
+            
+            // Filter Logic
             if (tab === 'reports') {
-                const startEl = document.getElementById('export-start');
-                const endEl = document.getElementById('export-end');
-                const start = startEl ? startEl.value : null;
-                const end = endEl ? endEl.value : null;
-                
+                const start = document.getElementById('export-start').value;
+                const end = document.getElementById('export-end').value;
                 if (start || end) {
                     dataToExport = itemsData.filter(item => {
-                        const itemDate = item.date; // Format YYYY-MM-DD
-                        if (start && itemDate < start) return false;
-                        if (end && itemDate > end) return false;
+                        const d = item.date;
+                        if (start && d < start) return false;
+                        if (end && d > end) return false;
                         return true;
                     });
                 }
             }
 
-            if (!dataToExport.length) return alert("No data found to export (check date filters).");
+            if (!dataToExport.length) return alert("No data found.");
             
             let csvRows = [];
 
             if (tab === 'reports') {
-                // Long Format Export for Reports
-                const headers = ['Timestamp', 'SupervisorName', 'InputDate', 'MemberID', 'MemberName', 'MemberNickname', 'Role', 'Status', 'StoreType', 'StoreCode', 'Remarks'];
+                // Fetch Member Master Data to look up Phone Numbers
+                const memSnap = await getDocs(collection(db, 'members'));
+                const memMap = {};
+                memSnap.forEach(doc => { memMap[doc.id] = doc.data().phone || ''; });
+
+                // Updated Headers with Phone
+                const headers = ['Timestamp', 'SupervisorName', 'InputDate', 'MemberID', 'MemberName', 'MemberNickname', 'MemberPhone', 'Role', 'Status', 'StoreType', 'StoreCode', 'Remarks'];
                 csvRows.push(headers.join(','));
 
                 for (const item of dataToExport) {
@@ -158,6 +229,8 @@
                     const mid = escapeCsv(item.memberId);
                     const mName = escapeCsv(item.memberName);
                     const mNick = escapeCsv(item.memberNickname || '');
+                    // Lookup Phone
+                    const mPhone = escapeCsv(memMap[item.memberId] || '');
                     const role = escapeCsv(item.memberRole || '');
                     const status = escapeCsv(item.status);
                     const remarks = escapeCsv(item.remarks || '');
@@ -166,11 +239,11 @@
                         for (const store of item.stores) {
                             let type = 'Permanent';
                             if (store.startsWith('(Event)')) type = 'Event';
-                            const row = [`"${ts}"`, `"${sup}"`, `"${date}"`, `"${mid}"`, `"${mName}"`, `"${mNick}"`, `"${role}"`, `"${status}"`, `"${type}"`, `"${escapeCsv(store)}"`, `"${remarks}"`];
+                            const row = [`"${ts}"`, `"${sup}"`, `"${date}"`, `"${mid}"`, `"${mName}"`, `"${mNick}"`, `"${mPhone}"`, `"${role}"`, `"${status}"`, `"${type}"`, `"${escapeCsv(store)}"`, `"${remarks}"`];
                             csvRows.push(row.join(','));
                         }
                     } else {
-                        const row = [`"${ts}"`, `"${sup}"`, `"${date}"`, `"${mid}"`, `"${mName}"`, `"${mNick}"`, `"${role}"`, `"${status}"`, `""`, `""`, `"${remarks}"`];
+                        const row = [`"${ts}"`, `"${sup}"`, `"${date}"`, `"${mid}"`, `"${mName}"`, `"${mNick}"`, `"${mPhone}"`, `"${role}"`, `"${status}"`, `""`, `""`, `"${remarks}"`];
                         csvRows.push(row.join(','));
                     }
                 }
@@ -178,12 +251,7 @@
                 const headers = Object.keys(dataToExport[0]);
                 csvRows.push(headers.join(','));
                 dataToExport.forEach(row => {
-                    const values = headers.map(h => {
-                        let val = row[h];
-                        if (val && val.toDate) val = val.toDate().toISOString();
-                        if (Array.isArray(val)) val = val.join('; ');
-                        return `"${escapeCsv(val)}"`;
-                    });
+                    const values = headers.map(h => `"${escapeCsv(row[h])}"`);
                     csvRows.push(values.join(','));
                 });
             }
@@ -201,7 +269,17 @@
         function renderForm(tab, data) {
             let fields = '';
             if (tab === 'members') {
-                fields = `<input name="id" value="${data.id||''}" placeholder="ID (Key)" class="w-full border p-2 rounded" ${data.id?'disabled':''}><input name="name" value="${data.name||''}" placeholder="Name" class="w-full border p-2 rounded"><input name="nickname" value="${data.nickname||''}" placeholder="Nickname" class="w-full border p-2 rounded"><input name="team" value="${data.team||''}" placeholder="Team" class="w-full border p-2 rounded"><select name="role" class="w-full border p-2 rounded"><option value="Member">Member</option><option value="Supervisor" ${data.role==='Supervisor'?'selected':''}>Supervisor</option></select>`;
+                // Added Phone Input
+                fields = `
+                    <input name="id" value="${data.id||''}" placeholder="ID (Key)" class="w-full border p-2 rounded" ${data.id?'disabled':''}>
+                    <input name="name" value="${data.name||''}" placeholder="Name" class="w-full border p-2 rounded">
+                    <input name="nickname" value="${data.nickname||''}" placeholder="Nickname" class="w-full border p-2 rounded">
+                    <input name="phone" value="${data.phone||''}" placeholder="Phone Number" class="w-full border p-2 rounded">
+                    <input name="team" value="${data.team||''}" placeholder="Team" class="w-full border p-2 rounded">
+                    <select name="role" class="w-full border p-2 rounded">
+                        <option value="Member">Member</option>
+                        <option value="Supervisor" ${data.role==='Supervisor'?'selected':''}>Supervisor</option>
+                    </select>`;
             } else if (tab === 'stores') {
                 fields = `<input name="id" value="${data.id||''}" placeholder="Code (Key)" class="w-full border p-2 rounded" ${data.id?'disabled':''}><input name="name" value="${data.name||''}" placeholder="Store Name" class="w-full border p-2 rounded"><input name="team" value="${data.team||''}" placeholder="Team" class="w-full border p-2 rounded">`;
             } else if (tab === 'supervisors') {
