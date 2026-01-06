@@ -51,15 +51,16 @@
         import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // *** TODO: PASTE YOUR CONFIG HERE ***
-        const firebaseConfig = {
-          apiKey: "AIzaSyBVHer7SxgAMrQa-0-Y9kXMoJF6c4x0UUs",
-          authDomain: "manday-tap.firebaseapp.com",
-          projectId: "manday-tap",
-          storageBucket: "manday-tap.firebasestorage.app",
-          messagingSenderId: "334048350098",
-          appId: "1:334048350098:web:13d0c9292a1cbc9a02fb4b",
-          measurementId: "G-2L6QZXXY50"
-        };
+const firebaseConfig = {
+  apiKey: "AIzaSyBVHer7SxgAMrQa-0-Y9kXMoJF6c4x0UUs",
+  authDomain: "manday-tap.firebaseapp.com",
+  projectId: "manday-tap",
+  storageBucket: "manday-tap.firebasestorage.app",
+  messagingSenderId: "334048350098",
+  appId: "1:334048350098:web:13d0c9292a1cbc9a02fb4b",
+  measurementId: "G-2L6QZXXY50"
+};
+
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         let currentTab = 'members'; let itemsData = [];
@@ -131,10 +132,11 @@
                     }
                     else if(type==='stores') { id=cols[0]; data={name:cols[1], team:cols[2]}; }
                     
-                    if(id) { await setDoc(doc(db, type, id), data); count++; }
+                    // Uses {merge: true} to update existing records (add phone numbers) without creating duplicates
+                    if(id) { await setDoc(doc(db, type, id), data, { merge: true }); count++; }
                 } catch(e) { console.error(e); }
             }
-            log.innerText = `Success! Imported ${count} rows.`;
+            log.innerText = `Success! Imported/Updated ${count} rows.`;
         };
 
         async function loadData(tab) {
