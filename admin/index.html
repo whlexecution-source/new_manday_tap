@@ -108,31 +108,72 @@ const firebaseConfig = {
             `;
         }
 
+        // CSV Parser that handles newlines inside quotes
+        function parseCSV(text) {
+            let results = [];
+            let row = [];
+            let val = '';
+            let inQuote = false;
+            
+            for (let i = 0; i < text.length; i++) {
+                let char = text[i];
+                let nextChar = text[i+1];
+                
+                if (char === '"') {
+                    if (inQuote && nextChar === '"') {
+                        val += '"'; // Escaped quote
+                        i++;
+                    } else {
+                        inQuote = !inQuote; // Toggle quote
+                    }
+                } else if (char === ',' && !inQuote) {
+                    row.push(val.trim());
+                    val = '';
+                } else if ((char === '\r' || char === '\n') && !inQuote) {
+                    if (char === '\r' && nextChar === '\n') i++; // Handle CRLF
+                    row.push(val.trim());
+                    results.push(row);
+                    row = [];
+                    val = '';
+                } else {
+                    val += char;
+                }
+            }
+            if (val || row.length > 0) {
+                row.push(val.trim());
+                results.push(row);
+            }
+            return results;
+        }
+
         window.importData = async (type) => {
             const raw = document.getElementById(`csv-${type}`).value.trim();
             const log = document.getElementById(`log-${type}`);
             if(!raw) return alert("Empty input");
             
-            const lines = raw.split('\n');
+            const rows = parseCSV(raw);
             let count = 0;
             log.innerText = "Processing...";
             
-            for(let i=0; i<lines.length; i++) {
-                if (i===0 && (lines[i].toLowerCase().includes('name') || lines[i].toLowerCase().includes('team'))) continue; // Skip header
-                const cols = lines[i].split(',').map(c => c.trim());
+            for(let i=0; i<rows.length; i++) {
+                const cols = rows[i];
+                // Check if header row by looking for key words (case-insensitive)
+                const rowStr = cols.join(',').toLowerCase();
+                if (i===0 && (rowStr.includes('name') || rowStr.includes('team'))) continue; 
+
                 if(cols.length < 2) continue;
 
                 try {
                     let id, data;
                     if(type==='supervisors') { id=cols[0]; data={name:cols[1], team:cols[2]}; }
                     else if(type==='members') { 
-                        // Updated to include phone at index 3
+                        // ID, Name, Nickname, Phone, Team, Role
                         id=cols[0]; 
                         data={name:cols[1], nickname:cols[2]||'', phone:cols[3]||'', team:cols[4], role:cols[5]||'Member'}; 
                     }
                     else if(type==='stores') { id=cols[0]; data={name:cols[1], team:cols[2]}; }
                     
-                    // Uses {merge: true} to update existing records (add phone numbers) without creating duplicates
+                    // Uses {merge: true} to update existing records
                     if(id) { await setDoc(doc(db, type, id), data, { merge: true }); count++; }
                 } catch(e) { console.error(e); }
             }
@@ -153,7 +194,6 @@ const firebaseConfig = {
             let columns = [], title = "", canEdit = true, canAdd = true;
             if (tab === 'members') {
                 title = "Team Members";
-                // Added Phone column
                 columns = [ {k:'id',l:'ID'}, {k:'name',l:'Name'}, {k:'nickname',l:'Nick'}, {k:'phone',l:'Phone'}, {k:'role',l:'Role'}, {k:'team',l:'Team'} ];
             } else if (tab === 'stores') {
                 title = "Store Master";
