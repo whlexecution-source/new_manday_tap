@@ -132,7 +132,7 @@
                 <div>
                     <select class="status-select w-full p-2 border rounded-lg font-semibold status-default bg-gray-700 text-white border-gray-600 focus:ring-indigo-500">
                         <option value="" disabled ${!state.status ? 'selected' : ''}>เลือกสถานะ</option>
-                        ${['ลงงาน','อบรม','ลาป่วย','ลากิจ','ลาไม่รับค่าจ้าง','วันหยุดประจำสัปดาห์','วันหยุดนักขัตฤกษ์','ติดต่อไม่ได้','หมดสัญญา','ลาออก'].map(s => `<option value="${s}" ${state.status===s?'selected':''}>${s}</option>`).join('')}
+                        ${['ลงงาน','อบรม','ลาป่วย','ลากิจ','ลาไม่รับค่าจ้าง','วันหยุดประจำสัปดาห์','วันหยุดนักขัตฤกษ์','ติดต่อไม่ได้','หมดสัญญา','ลาออก','รอลงงาน'].map(s => `<option value="${s}" ${state.status===s?'selected':''}>${s}</option>`).join('')}
                     </select>
                 </div>
                 <div class="store-section ${state.status !== 'ลงงาน' ? 'hidden' : ''}">
@@ -207,7 +207,7 @@
 
     function updateStatusColor(el, val) {
         el.className = 'status-select w-full p-2 border rounded-lg font-semibold ' + 
-            (val === 'ลงงาน' ? 'status-work' : val === 'อบรม' ? 'status-training' : ['ลาป่วย','ลากิจ','ลาไม่รับค่าจ้าง','ติดต่อไม่ได้'].includes(val) ? 'status-leave' : val.includes('วันหยุด') ? 'status-holiday' : ['หมดสัญญา','ลาออก'].includes(val) ? 'status-terminate' : 'status-default');
+            (val === 'ลงงาน' ? 'status-work' : val === 'อบรม' ? 'status-training' : ['ลาป่วย','ลากิจ','ลาไม่รับค่าจ้าง','ติดต่อไม่ได้','รอลงงาน'].includes(val) ? 'status-leave' : val.includes('วันหยุด') ? 'status-holiday' : ['หมดสัญญา','ลาออก'].includes(val) ? 'status-terminate' : 'status-default');
     }
 
     async function login(phone) {
