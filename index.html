@@ -207,7 +207,7 @@
 
     function updateStatusColor(el, val) {
         el.className = 'status-select w-full p-2 border rounded-lg font-semibold ' + 
-            (val === 'ลงงาน' ? 'status-work' : val === 'อบรม' ? 'status-training' : ['ลาป่วย','ลากิจ','ลาไม่รับค่าจ้าง','ติดต่อไม่ได้','รอลงงาน'].includes(val) ? 'status-leave' : val.includes('วันหยุด') ? 'status-holiday' : ['หมดสัญญา','ลาออก'].includes(val) ? 'status-terminate' : 'status-default');
+            (val === 'ลงงาน' ? 'status-work' : val === 'อบรม' ? 'status-training' : ['ลาป่วย','ลากิจ','ลาไม่รับค่าจ้าง','ติดต่อไม่ได้'].includes(val) ? 'status-leave' : val.includes('วันหยุด') ? 'status-holiday' : ['หมดสัญญา','ลาออก','รอลงงาน'].includes(val) ? 'status-terminate' : 'status-default');
     }
 
     async function login(phone) {
