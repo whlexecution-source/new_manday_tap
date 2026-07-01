@@ -48,7 +48,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // *** TODO: PASTE YOUR CONFIG HERE ***
 const firebaseConfig = {
@@ -64,7 +64,14 @@ const firebaseConfig = {
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         let currentTab = 'members'; let itemsData = [];
+        let reportFilter = { start: getTodayStr(), end: getTodayStr() }; // default: today only
         const container = document.getElementById('main-container'); const modal = document.getElementById('modal'); const modalForm = document.getElementById('modal-form'); const saveBtn = document.getElementById('save-btn');
+
+        function getTodayStr() {
+            const d = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+        }
 
         window.switchTab = async (tab) => {
             currentTab = tab;
@@ -73,6 +80,9 @@ const firebaseConfig = {
             
             if (tab === 'migration') {
                 renderMigration();
+            } else if (tab === 'reports') {
+                reportFilter = { start: getTodayStr(), end: getTodayStr() }; // reset to today each time tab is opened
+                await loadData(tab);
             } else {
                 await loadData(tab);
             }
@@ -183,12 +193,31 @@ const firebaseConfig = {
         async function loadData(tab) {
             container.innerHTML = '<div class="flex justify-center items-center h-full"><div class="loader"></div></div>';
             try {
-                const colName = tab === 'reports' ? 'manday_submissions' : tab;
-                const snapshot = await getDocs(collection(db, colName));
-                itemsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                if (tab === 'reports') {
+                    const start = reportFilter.start || getTodayStr();
+                    const end = reportFilter.end || getTodayStr();
+                    const q = query(collection(db, 'manday_submissions'), where('date', '>=', start), where('date', '<=', end));
+                    const snapshot = await getDocs(q);
+                    itemsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                } else {
+                    const snapshot = await getDocs(collection(db, tab));
+                    itemsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                }
                 renderTable(tab, itemsData);
             } catch (error) { container.innerHTML = `<div class="text-red-500 text-center">Error: ${error.message}</div>`; }
         }
+
+        window.applyReportFilter = () => {
+            const start = document.getElementById('filter-start').value || getTodayStr();
+            const end = document.getElementById('filter-end').value || getTodayStr();
+            reportFilter = { start, end };
+            loadData('reports');
+        };
+
+        window.showTodayReports = () => {
+            reportFilter = { start: getTodayStr(), end: getTodayStr() };
+            loadData('reports');
+        };
 
         function renderTable(tab, data) {
             let columns = [], title = "", canEdit = true, canAdd = true;
@@ -208,14 +237,18 @@ const firebaseConfig = {
 
             const html = `
                 <div class="flex justify-between mb-6 flex-wrap gap-4 items-end">
-                    <div><h2 class="text-2xl font-bold">${title}</h2></div>
+                    <div>
+                        <h2 class="text-2xl font-bold">${title}</h2>
+                        ${tab === 'reports' ? `<p class="text-xs text-gray-400 mt-1">Showing ${reportFilter.start} to ${reportFilter.end} &middot; ${data.length} row(s)</p>` : ''}
+                    </div>
                     <div class="flex gap-2 items-center flex-wrap">
                         ${tab === 'reports' ? `
                             <div class="flex items-center gap-2 mr-2 bg-white p-1 rounded border shadow-sm">
-                                <span class="text-xs text-gray-500 pl-1">Filter Date:</span>
-                                <input type="date" id="export-start" class="text-sm border border-gray-200 rounded px-2 py-1 focus:ring-indigo-500 focus:border-indigo-500">
+                                <span class="text-xs text-gray-500 pl-1">Date:</span>
+                                <input type="date" id="filter-start" value="${reportFilter.start||''}" onchange="applyReportFilter()" class="text-sm border border-gray-200 rounded px-2 py-1 focus:ring-indigo-500 focus:border-indigo-500">
                                 <span class="text-gray-400">-</span>
-                                <input type="date" id="export-end" class="text-sm border border-gray-200 rounded px-2 py-1 focus:ring-indigo-500 focus:border-indigo-500">
+                                <input type="date" id="filter-end" value="${reportFilter.end||''}" onchange="applyReportFilter()" class="text-sm border border-gray-200 rounded px-2 py-1 focus:ring-indigo-500 focus:border-indigo-500">
+                                <button onclick="showTodayReports()" class="text-xs text-indigo-600 hover:underline px-2">Today</button>
                             </div>
                         ` : ''}
                         <button onclick="exportCSV('${tab}')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow-sm flex items-center gap-2"><i class="fas fa-file-csv"></i> Export CSV</button>
@@ -233,21 +266,8 @@ const firebaseConfig = {
         }
 
         window.exportCSV = async (tab) => {
-            let dataToExport = itemsData;
-            
-            // Filter Logic
-            if (tab === 'reports') {
-                const start = document.getElementById('export-start').value;
-                const end = document.getElementById('export-end').value;
-                if (start || end) {
-                    dataToExport = itemsData.filter(item => {
-                        const d = item.date;
-                        if (start && d < start) return false;
-                        if (end && d > end) return false;
-                        return true;
-                    });
-                }
-            }
+            // itemsData already reflects the currently applied date filter (for reports)
+            const dataToExport = itemsData;
 
             if (!dataToExport.length) return alert("No data found.");
             
